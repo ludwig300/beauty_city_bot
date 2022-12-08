@@ -15,6 +15,7 @@ class ScheduleAdmin(admin.ModelAdmin):
         ScheduleServiceInline,
     ]
 
+
 admin.site.register(Salon)
 admin.site.register(Service)
 admin.site.register(Schedule, ScheduleAdmin)
@@ -24,4 +25,3 @@ admin.site.register(User)
 @admin.register(Specialist)
 class SpecialistAdmin(admin.ModelAdmin):
     raw_id_fields = ('services', 'salon')
-
