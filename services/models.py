@@ -18,12 +18,15 @@ class User(models.Model):
     def __str__(self):
         return self.full_name
 
+
 class Salon(models.Model):
     salon_name = models.CharField(
         'Наименование салона', max_length=200, db_index=True,
     )
     address = models.TextField(
         'Адрес Салона', blank=True, null=True)
+    lat = models.FloatField(verbose_name='Широта', null=True)
+    lon = models.FloatField(verbose_name='Долгота',  null=True)
 
     def __str__(self):
         return self.salon_name
