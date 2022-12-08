@@ -36,10 +36,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 START_CHOICE = 1
-LOCATION = 2
-NEARBY_SALONS = 3
-MASTER = 4
-SERVICE = 5
+NEARBY_SALONS = 2
+MASTER = 3
+SERVICE = 4
 END = ConversationHandler.END
 
 
@@ -69,7 +68,7 @@ def nearby_salon(update: Update, context: CallbackContext) -> int:
             salon.lon,
             salon.lat
         )
-    return LOCATION
+    return NEARBY_SALONS
 
 
 def master(update: Update, context: CallbackContext) -> int:
@@ -107,7 +106,7 @@ def location(update: Update, context: CallbackContext) -> int:
         text="Чтобы найти ближайшие салоны, поделитесь своей геолокацией",
         reply_markup=reply_markup
     )
-    return LOCATION
+    return NEARBY_SALONS
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
@@ -142,11 +141,22 @@ def run_polling():
                     service
                 )
             ],
-            LOCATION: [MessageHandler(
+            NEARBY_SALONS: [MessageHandler(
                     Filters.location,
                     nearby_salon
                 ),
             ],
+            MASTER: [MessageHandler(
+                    Filters.location,
+                    nearby_salon
+                ),
+            ],
+            SERVICE: [MessageHandler(
+                    Filters.location,
+                    nearby_salon
+                ),
+            ],
+
         },
         fallbacks=[CommandHandler('cancel', cancel)],
     )
