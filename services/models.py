@@ -27,6 +27,7 @@ class Salon(models.Model):
     )
     address = models.TextField(
         'Адрес Салона', blank=True, null=True)
+
     lat = models.FloatField('Широта', blank=True, null=True)
     lon = models.FloatField('Долгота', blank=True, null=True)
 
