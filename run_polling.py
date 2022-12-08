@@ -24,7 +24,7 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'beautycity.settings'
 django.setup()
 
 from beautycity.settings import TG_TOKEN
-from services.models import Salon
+from services.models import Salon, Schedule, Service, Specialist
 
 
 logging.basicConfig(
@@ -57,9 +57,18 @@ def start(update: Update, context: CallbackContext) -> int:
     return START_CHOICE
 
 
-def salon(update: Update, context: CallbackContext) -> int:
+def nearby_salon(update: Update, context: CallbackContext) -> int:
     user = update.message.location
-    logger.info("Agreement of %s, %s: %s", user.longitude, user.latitude, update.message.location)
+    salons = Salon.objects.all()
+    for salon in salons:
+        logger.info(
+            "Agreement of %s, %s: %s > Salon location: %s, %s",
+            user.longitude,
+            user.latitude,
+            update.message.location,
+            salon.lon,
+            salon.lat
+        )
     return LOCATION
 
 
@@ -135,7 +144,7 @@ def run_polling():
             ],
             LOCATION: [MessageHandler(
                     Filters.location,
-                    salon
+                    nearby_salon
                 ),
             ],
         },
