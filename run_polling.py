@@ -1,0 +1,158 @@
+import logging
+
+from environs import Env
+from telegram import (
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    KeyboardButton
+)
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    MessageHandler,
+    Filters,
+    ConversationHandler,
+    CallbackContext,
+)
+
+
+logging.basicConfig(
+    filename='app.log',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+logger = logging.getLogger(__name__)
+
+START_CHOICE = 1
+LOCATION = 2
+NEARBY_SALONS = 3
+MASTER = 4
+SERVICE = 5
+END = ConversationHandler.END
+
+
+def start(update: Update, context: CallbackContext) -> int:
+    reply_keyboard = [['Выбрать салон', 'Выбрать мастера', 'Выбрать услугу']]
+
+    update.message.reply_text(
+        'Привет, давай наведем тебе красоту.\n Можешь выбрать ближайший салон, любимого мастера или услугу.',
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True,
+            resize_keyboard=True,
+        ),
+    )
+
+    return START_CHOICE
+
+
+def salon(update: Update, context: CallbackContext) -> int:
+    location_keyboard = KeyboardButton(
+        text='Поделиться локацией',
+        request_location=True
+    )
+    custom_keyboard = [[location_keyboard]]
+    reply_markup = ReplyKeyboardMarkup(custom_keyboard, resize_keyboard=True)
+    update.message.reply_text(
+        text="Would you mind sharing your location with me?",
+        reply_markup=reply_markup
+    )
+    return LOCATION
+
+
+def master(update: Update, context: CallbackContext) -> int:
+
+    # user = update.message.from_user
+    # logger.info("Agreement of %s: %s", user.first_name, update.message.text)
+    # update.message.reply_text(
+    #     'Пожалуйста, выберете мастера',
+    #     reply_markup=ReplyKeyboardRemove(),
+    # )
+
+    return MASTER
+
+
+def service(update: Update, context: CallbackContext) -> int:
+
+    # user = update.message.from_user
+    # logger.info("Agreement of %s: %s", user.first_name, update.message.text)
+    # update.message.reply_text(
+    #     'Пожалуйста, выберите услугу',
+    #     reply_markup=ReplyKeyboardRemove(),
+    # )
+
+    return SERVICE
+
+
+def location(update: Update, context: CallbackContext) -> int:
+    loc = update.message.reply_location
+    print(loc.latitude)
+    location_keyboard = KeyboardButton(
+        text='Поделиться локацией',
+        request_location=True
+    )
+    custom_keyboard = [[location_keyboard]]
+    reply_markup = ReplyKeyboardMarkup(custom_keyboard, resize_keyboard=True)
+    update.message.reply_text(
+        text="Хотите отправить свою локацию?",
+        reply_markup=reply_markup
+    )
+
+    return LOCATION
+
+
+def cancel(update: Update, context: CallbackContext) -> int:
+    user = update.message.from_user
+    logger.info("User %s canceled the conversation.", user.first_name)
+    update.message.reply_text(
+        'Очень жаль, что вы не с нами! =(',
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+    return END
+
+
+def run_polling():
+    env = Env()
+    env.read_env()
+    tg_token = env('TG_TOKEN')
+    updater = Updater(token=tg_token, use_context=True)
+    dispatcher = updater.dispatcher
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            START_CHOICE: [
+                MessageHandler(
+                    Filters.regex('^Выбрать салон$'),
+                    salon
+                ),
+                MessageHandler(
+                    Filters.regex('^Выбрать мастера$'),
+                    master
+                ),
+                MessageHandler(
+                    Filters.regex('^Выбрать услугу$'),
+                    service
+                )
+            ],
+            LOCATION: [MessageHandler(
+                    Filters.regex('^Поделиться локацией$'),
+                    location
+                ),
+            ],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+    dispatcher.add_handler(conv_handler)
+
+    updater.start_polling()
+
+    updater.idle()
+
+
+if __name__ == "__main__":
+    run_polling()
