@@ -1,6 +1,8 @@
 import logging
+import os
 
-from environs import Env
+import django
+
 from telegram import (
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
@@ -17,6 +19,12 @@ from telegram.ext import (
     ConversationHandler,
     CallbackContext,
 )
+
+os.environ['DJANGO_SETTINGS_MODULE'] = 'beautycity.settings'
+django.setup()
+
+from beautycity.settings import TG_TOKEN
+from services.models import Salon
 
 
 logging.basicConfig(
@@ -50,16 +58,8 @@ def start(update: Update, context: CallbackContext) -> int:
 
 
 def salon(update: Update, context: CallbackContext) -> int:
-    location_keyboard = KeyboardButton(
-        text='Поделиться локацией',
-        request_location=True
-    )
-    custom_keyboard = [[location_keyboard]]
-    reply_markup = ReplyKeyboardMarkup(custom_keyboard, resize_keyboard=True)
-    update.message.reply_text(
-        text="Would you mind sharing your location with me?",
-        reply_markup=reply_markup
-    )
+    user = update.message.location
+    logger.info("Agreement of %s, %s: %s", user.longitude, user.latitude, update.message.location)
     return LOCATION
 
 
@@ -88,8 +88,6 @@ def service(update: Update, context: CallbackContext) -> int:
 
 
 def location(update: Update, context: CallbackContext) -> int:
-    loc = update.message.reply_location
-    print(loc.latitude)
     location_keyboard = KeyboardButton(
         text='Поделиться локацией',
         request_location=True
@@ -97,10 +95,9 @@ def location(update: Update, context: CallbackContext) -> int:
     custom_keyboard = [[location_keyboard]]
     reply_markup = ReplyKeyboardMarkup(custom_keyboard, resize_keyboard=True)
     update.message.reply_text(
-        text="Хотите отправить свою локацию?",
+        text="Чтобы найти ближайшие салоны, поделитесь своей геолокацией",
         reply_markup=reply_markup
     )
-
     return LOCATION
 
 
@@ -116,10 +113,7 @@ def cancel(update: Update, context: CallbackContext) -> int:
 
 
 def run_polling():
-    env = Env()
-    env.read_env()
-    tg_token = env('TG_TOKEN')
-    updater = Updater(token=tg_token, use_context=True)
+    updater = Updater(token=TG_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
     conv_handler = ConversationHandler(
@@ -128,7 +122,7 @@ def run_polling():
             START_CHOICE: [
                 MessageHandler(
                     Filters.regex('^Выбрать салон$'),
-                    salon
+                    location
                 ),
                 MessageHandler(
                     Filters.regex('^Выбрать мастера$'),
@@ -140,8 +134,8 @@ def run_polling():
                 )
             ],
             LOCATION: [MessageHandler(
-                    Filters.regex('^Поделиться локацией$'),
-                    location
+                    Filters.location,
+                    salon
                 ),
             ],
         },
