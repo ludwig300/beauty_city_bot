@@ -25,4 +25,3 @@ admin.site.register(User)
 @admin.register(Specialist)
 class SpecialistAdmin(admin.ModelAdmin):
     raw_id_fields = ('services', 'salon')
-

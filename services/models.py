@@ -14,6 +14,8 @@ class User(models.Model):
         null=False,
         blank=False
     )
+    lat = models.FloatField('Широта', blank=True, null=True)
+    lon = models.FloatField('Долгота', blank=True, null=True)
 
     def __str__(self):
         return self.full_name
@@ -25,8 +27,9 @@ class Salon(models.Model):
     )
     address = models.TextField(
         'Адрес Салона', blank=True, null=True)
-    lat = models.FloatField(verbose_name='Широта', null=True)
-    lon = models.FloatField(verbose_name='Долгота',  null=True)
+
+    lat = models.FloatField('Широта', blank=True, null=True)
+    lon = models.FloatField('Долгота', blank=True, null=True)
 
     def __str__(self):
         return self.salon_name
@@ -93,4 +96,3 @@ class Schedule(models.Model):
 
     def __unicode__(self):
         return self.user
-
