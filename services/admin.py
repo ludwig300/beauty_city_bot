@@ -1,27 +1,38 @@
 from django.contrib import admin
 
-from .models import Salon, Specialist, Service, Schedule, User
+from .models import User, Salon, PeriodOfTime, Service, Specialist, SpecialistInSalon, Schedule
 
 
-class ScheduleServiceInline(admin.TabularInline):
-    model = Schedule.service.through
+@admin.register(User)
+class UserAdmin(admin.ModelAdmin):
+    list_display = ('user_name', 'phoneNumber',)
 
 
-class ScheduleAdmin(admin.ModelAdmin):
-    list_display = ('user', 'date_time', 'salon',
-                    'specialist',)
-    ordering = ('date_time',)
-    inlines = [
-        ScheduleServiceInline,
-    ]
+@admin.register(Salon)
+class SalonAdmin(admin.ModelAdmin):
+    list_display = ('salon_name', 'address',)
 
 
-admin.site.register(Salon)
-admin.site.register(Service)
-admin.site.register(Schedule, ScheduleAdmin)
-admin.site.register(User)
+@admin.register(PeriodOfTime)
+class PeriodOfTimeAdmin(admin.ModelAdmin):
+    list_display = ('start_period', 'end_period',)
+
+
+@admin.register(Service)
+class ServiceAdmin(admin.ModelAdmin):
+    list_display = ('service_name', 'price',)
 
 
 @admin.register(Specialist)
 class SpecialistAdmin(admin.ModelAdmin):
-    raw_id_fields = ('services', 'salon')
+    list_display = ('specialist_name',)
+
+
+@admin.register(SpecialistInSalon)
+class SpecialistInSalonAdmin(admin.ModelAdmin):
+    list_display = ('date', 'specialist', 'salon',)
+
+
+@admin.register(Schedule)
+class ScheduleAdmin(admin.ModelAdmin):
+    list_display = ('date_service', 'time_service',)
