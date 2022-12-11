@@ -3,8 +3,9 @@
 
 ## .env-файл
 ```commandline
-DATABASE_FILEPATH=
+SECRET_KEY=
 DEBUG=
 ALLOWED_HOSTS=
+DATABASE=sqlite:///db.sqlite3
 TG_TOKEN=
 ```
