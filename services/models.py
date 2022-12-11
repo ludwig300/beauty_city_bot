@@ -1,8 +1,13 @@
 from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
+from smart_selects.db_fields import ChainedForeignKey
 
 
 class User(models.Model):
+    order_datetime = models.DateTimeField(
+        'Дата и время регистрации на посещение',
+        blank=False,
+    )
     user_name = models.CharField(
         'ФИО Пользователя',
         max_length=200,
@@ -34,72 +39,66 @@ class Salon(models.Model):
         return self.salon_name
 
 
-class PeriodOfTime(models.Model):
-    start_period = models.TimeField('Время начала', blank=False,)
-    end_period = models.TimeField('Время завершения', blank=False,)
-
-    def __str__(self):
-        return f'{self.start_period} - {self.end_period}'
-
-
 class Service(models.Model):
+    salon = models.ForeignKey(
+        Salon,
+        verbose_name='Салон',
+        related_name="salon_service",
+        blank=True,
+        on_delete=models.CASCADE,
+    )
+
     service_name = models.CharField(
         'Наименование услуги', max_length=200, db_index=True,
     )
     price = models.IntegerField('Цена услуги', db_index=True)
 
     def __str__(self):
-        return self.service_name
+        return f'Салон: {self.salon}. Услуга:{self.service_name}. Цена: {self.price}.'
 
 
 class Specialist(models.Model):
-    specialist_name = models.CharField(
+    full_name = models.CharField(
         'ФИО Специалиста',
         max_length=200,
         db_index=True,
     )
-    salon = models.ManyToManyField(
-        Salon,
-        verbose_name='Салоны, в которых работает Мастер',
-        related_name="salons",
-        blank=True,
-    )
-    service = models.ManyToManyField(
-        Service,
-        verbose_name='Услуги, оказываемые Мастером',
-        related_name="services",
-        blank=True,
-    )
-
-    def __str__(self):
-        return f'Мастер: {self.specialist_name}'
-
-
-class SpecialistInSalon(models.Model):
-    date = models.DateField('Дата работы', blank=True)
-    specialist = models.ForeignKey(
-        Specialist,
-        verbose_name='Имя мастера',
-        on_delete=models.CASCADE,
-        blank=False,
-    )
     salon = models.ForeignKey(
         Salon,
-        verbose_name='в каком салоне работает',
+        verbose_name='Салон, в котором работает Мастер',
+        related_name="salon",
+        blank=True,
         on_delete=models.CASCADE,
-        blank=False,
+    )
+    services = models.ManyToManyField(
+        Service, related_name="services",
+        verbose_name='Услуги специалиста',
+        blank=True
     )
 
     def __str__(self):
-        return f'{self.date} - Мастер {self.specialist} работает в салоне {self.salon}'
+        return self.full_name
 
 
 class Schedule(models.Model):
-    order_datetime = models.DateTimeField(
-        'Дата и время регистрации на посещение',
-        auto_now=True,
-        blank=False,
+    class Meta:
+        unique_together = ('specialist', 'date', 'timeslot')
+
+    TIMESLOT_LIST = (
+        (0, '09:00 – 10:00'),
+        (1, '10:00 – 11:00'),
+        (2, '11:00 – 12:00'),
+        (3, '12:00 – 13:00'),
+        (4, '13:00 – 14:00'),
+        (5, '15:00 – 16:00'),
+        (6, '16:00 – 17:00'),
+        (7, '17:00 – 18:00'),
+        (8, '18:00 – 19:00'),
     )
+
+    date = models.DateField('Дата посещения', help_text="YYYY-MM-DD")
+    timeslot = models.IntegerField(choices=TIMESLOT_LIST, null=True)
+
     user = models.ForeignKey(
         User,
         verbose_name='Имя клиента',
@@ -107,28 +106,7 @@ class Schedule(models.Model):
         related_name='schedules_user',
         blank=False,
     )
-    date_service = models.DateField(
-        verbose_name='Дата записи',
-        blank=False,
-    )
-    time_service = models.ForeignKey(
-        PeriodOfTime,
-        verbose_name='Время записи',
-        on_delete=models.CASCADE,
-        blank=False,
-    )
-    service = models.ForeignKey(
-        Service,
-        verbose_name='Услуга',
-        on_delete=models.CASCADE,
-        blank=True,
-    )
-    specialist = models.ForeignKey(
-        Specialist,
-        verbose_name='Мастер',
-        on_delete=models.CASCADE,
-        blank=True,
-    )
+
     salon = models.ForeignKey(
         Salon,
         verbose_name='Салон',
@@ -136,6 +114,25 @@ class Schedule(models.Model):
         blank=False
     )
 
-    def __unicode__(self):
-        return f'{self.order_datetime}: {self.user} - {self.date_service} {self.time_service} - {self.service} - ' \
-               f'мастер: {self.specialist} в салоне {self.salon}'
+    specialist = ChainedForeignKey(
+        Specialist,
+        chained_field="salon",
+        chained_model_field="salon",
+        show_all=False,
+        sort=True,
+        on_delete=models.CASCADE,
+        blank=True,
+    )
+    services = ChainedForeignKey(
+        Service,
+        chained_field="specialist",
+        chained_model_field="services",
+        show_all=False,
+        sort=True,
+        on_delete=models.CASCADE,
+        blank=True,
+    )
+
+    @property
+    def time(self):
+        return self.TIMESLOT_LIST[self.timeslot][1]
