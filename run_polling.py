@@ -2,13 +2,12 @@ import logging
 import os
 
 import django
+
 from math import asin, cos, radians, sin, sqrt
 from telegram import (
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
     Update,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
     KeyboardButton
 )
 from telegram.ext import (
@@ -24,7 +23,7 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'beautycity.settings'
 django.setup()
 
 from beautycity.settings import TG_TOKEN
-from services.models import Salon, Schedule, Service, Specialist, PeriodOfTime, SpecialistInSalon
+from services.models import Salon, Schedule, Service, Specialist
 
 logging.basicConfig(
     filename='app.log',
@@ -35,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 START_CHOICE = 1
-NEARBY_SALONS = 2
+NEARBY_SALON = 2
 MASTER = 3
 SERVICE = 4
 SCHEDULE = 5
@@ -45,6 +44,7 @@ NAME = 8
 PHONE = 9
 REGISTRATION = 10
 CONFIRMATION = 11
+SALONS = 12
 END = ConversationHandler.END
 
 
@@ -153,6 +153,8 @@ def start(update: Update, context: CallbackContext) -> int:
         ['Выбрать салон', 'Выбрать мастера', 'Выбрать услугу'],
         ['Отменить']
     ]
+    context.bot_data['step'] = 1
+    print('start, step:', context.bot_data['step'])
     user = update.message.from_user
     logger.info("Choice of %s: %s", user.first_name, update.message.text)
     update.message.reply_text(
@@ -166,8 +168,36 @@ def start(update: Update, context: CallbackContext) -> int:
     return START_CHOICE
 
 
+def show_salons(update: Update, context: CallbackContext) -> int:
+    user = update.message.location
+    salons = Salon.objects.all()
+    salons_buttons = list()
+    context.bot_data['step'] += 1
+    print('show_salons, step:', context.bot_data['step'])
+    for salon in salons:
+        logger.info(
+            "Agreement of %s, %s: > Salon location: %s, %s",
+            salon,
+            user,
+            salon.lon,
+            salon.lat
+        )
+        salons_buttons.append([salon.salon_name])
+    print(salons_buttons)
+    update.message.reply_text(
+        'Выберите салон',
+        reply_markup=ReplyKeyboardMarkup(
+            salons_buttons, one_time_keyboard=True,
+            resize_keyboard=True,
+        )
+    )
+    return SERVICE
+
+
 def nearby_salon(update: Update, context: CallbackContext) -> int:
     user = update.message.location
+    context.bot_data['step'] += 1
+    print('nearby_salon, step:', context.bot_data['step'])
     salons = Salon.objects.all()
     salons_location = list()
     for salon in salons:
@@ -199,10 +229,12 @@ def nearby_salon(update: Update, context: CallbackContext) -> int:
 
 def master(update: Update, context: CallbackContext) -> int:
     reply_keyboard = list()
-    specialists = SpecialistInSalon.objects.all()
+    context.bot_data['step'] += 1
+    print('master, step:', context.bot_data['step'])
+    specialists = Specialist.objects.all()
     for some_specialist in specialists:
         reply_keyboard.append(
-            [some_specialist.specialist.specialist_name]
+            [some_specialist.full_name]
         )
     user = update.message.from_user
     logger.info("Master choice of %s: %s", user.first_name, reply_keyboard)
@@ -214,11 +246,16 @@ def master(update: Update, context: CallbackContext) -> int:
             resize_keyboard=True,
         ),
     )
-    return REGISTRATION
+    if context.bot_data['step'] == 2:
+        return SALONS
+    elif context.bot_data['step'] == 6:
+        return REGISTRATION
 
 
 def service(update: Update, context: CallbackContext) -> int:
     reply_keyboard = list()
+    context.bot_data['step'] += 1
+    print('service, step:', context.bot_data['step'])
     services = Service.objects.all()
     for some_service in services:
         reply_keyboard.append(
@@ -239,10 +276,12 @@ def service(update: Update, context: CallbackContext) -> int:
 
 def time(update: Update, context: CallbackContext) -> int:
     reply_keyboard = list()
-    booking_time = PeriodOfTime.objects.all()
+    context.bot_data['step'] += 1
+    print('time, step:', context.bot_data['step'])
+    booking_time = Schedule.objects.all()
     for some_time in booking_time:
         reply_keyboard.append(
-            [f'{some_time.start_period.hour}ч {some_time.start_period.minute}мин']
+            [some_time.TIMESLOT_LIST]
         )
     user = update.message.from_user
     logger.info("Service of %s: %s", user.first_name, update.message.text)
@@ -254,7 +293,7 @@ def time(update: Update, context: CallbackContext) -> int:
             resize_keyboard=True,
         ),
     )
-
+    
     return MASTER
 
 
@@ -263,14 +302,15 @@ def location(update: Update, context: CallbackContext) -> int:
         text='Поделиться локацией',
         request_location=True
     )
-
+    context.bot_data['step'] += 1
+    print('location, step:', context.bot_data['step'])
     custom_keyboard = [[location_keyboard]]
     reply_markup = ReplyKeyboardMarkup(custom_keyboard, resize_keyboard=True)
     update.message.reply_text(
         text="Чтобы найти ближайшие салоны, поделитесь своей геолокацией",
         reply_markup=reply_markup
     )
-    return NEARBY_SALONS
+    return NEARBY_SALON
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
@@ -309,15 +349,23 @@ def run_polling():
                     cancel
                 )
             ],
-            NEARBY_SALONS: [MessageHandler(
-                Filters.location,
-                nearby_salon
-            ),
+            NEARBY_SALON: [
+                MessageHandler(
+                    Filters.location,
+                    nearby_salon
+                ),
             ],
-            MASTER: [MessageHandler(
-                Filters.text & ~Filters.command,
-                master
-            ),
+            SALONS: [
+                MessageHandler(
+                    Filters.text & ~Filters.command,
+                    show_salons
+                ),
+            ],
+            MASTER: [
+                MessageHandler(
+                    Filters.text & ~Filters.command,
+                    master
+                ),
             ],
             SERVICE: [
                 MessageHandler(
