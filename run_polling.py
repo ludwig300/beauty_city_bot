@@ -1,8 +1,9 @@
 import logging
 import os
 
+import phonenumbers
 import django
-
+import datetime
 from math import asin, cos, radians, sin, sqrt
 from telegram import (
     ReplyKeyboardMarkup,
@@ -17,13 +18,14 @@ from telegram.ext import (
     Filters,
     ConversationHandler,
     CallbackContext,
+    Handler
 )
 
 os.environ['DJANGO_SETTINGS_MODULE'] = 'beautycity.settings'
 django.setup()
 
 from beautycity.settings import TG_TOKEN
-from services.models import Salon, Schedule, Service, Specialist
+from services.models import Salon, Schedule, Service, Specialist, TimeSlot
 
 logging.basicConfig(
     filename='app.log',
@@ -52,6 +54,7 @@ def registration(update: Update, context: CallbackContext) -> int:
     reply_keyboard = [['Согласен', 'Не согласен']]
     user = update.message.from_user
     logger.info("Master of %s: %s", user.first_name, update.message.text)
+    context.bot_data['master'] = update.message.text
     update.message.reply_text(
         'Привет, мы собираем личные данные. Вы согласны на обработку вашей персональной информации?',
         reply_markup=ReplyKeyboardMarkup(
@@ -92,13 +95,14 @@ def name(update: Update, context: CallbackContext) -> int:
 
 
 def phone_number(update: Update, context: CallbackContext) -> int:
+
     context.bot_data['phone'] = update.message.text
     reply_keyboard = [['Хочу записаться!', 'Отменить']]
     try:
         user = update.message.from_user
         if not user:
             raise ValueError('Invalid value')
-        logger.info("Email of %s: %s", user.first_name, update.message.text)
+        logger.info("Phone number of %s: %s", user.first_name, update.message.text)
         update.message.reply_text(
             'Спасибо. Подтвердите запись к мастеру',
             reply_markup=ReplyKeyboardMarkup(
@@ -114,7 +118,6 @@ def phone_number(update: Update, context: CallbackContext) -> int:
 
 def confirmation(update: Update, context: CallbackContext) -> int:
     print(context.bot_data)
-    user = update.message.from_user
     reply_keyboard = [['Оплатить сейчас']]
     update.message.reply_text(
         'Спасибо. Вы записаны',
@@ -150,8 +153,7 @@ def find_closest_lat_lon(data, v):
 
 def start(update: Update, context: CallbackContext) -> int:
     reply_keyboard = [
-        ['Выбрать салон', 'Выбрать мастера', 'Выбрать услугу'],
-        ['Отменить']
+        ['Выбрать салон', 'Выбрать мастера', 'Выбрать услугу']
     ]
     context.bot_data['step'] = 1
     print('start, step:', context.bot_data['step'])
@@ -182,7 +184,7 @@ def show_salons(update: Update, context: CallbackContext) -> int:
             salon.lon,
             salon.lat
         )
-        salons_buttons.append([salon.salon_name])
+        salons_buttons.append([salon.name])
     print(salons_buttons)
     update.message.reply_text(
         'Выберите салон',
@@ -215,10 +217,10 @@ def nearby_salon(update: Update, context: CallbackContext) -> int:
         lon=nearby_location['longitude']
     ).first()
 
-    context.bot_data['salon'] = [salon.salon_name, salon.address]
-    reply_keyboard = [['Выбрать услугу']]
+    context.bot_data['salon'] = [salon.name, salon.address]
+    reply_keyboard = [['Выбрать ближайший салон']]
     update.message.reply_text(
-        f' Ближайший салон: {salon.salon_name}',
+        f' Ближайший салон: {salon.name}',
         reply_markup=ReplyKeyboardMarkup(
             reply_keyboard, one_time_keyboard=True,
             resize_keyboard=True,
@@ -234,7 +236,7 @@ def master(update: Update, context: CallbackContext) -> int:
     specialists = Specialist.objects.all()
     for some_specialist in specialists:
         reply_keyboard.append(
-            [some_specialist.full_name]
+            some_specialist.name
         )
     user = update.message.from_user
     logger.info("Master choice of %s: %s", user.first_name, reply_keyboard)
@@ -242,7 +244,7 @@ def master(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         'Выберите мастера',
         reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, one_time_keyboard=True,
+            [reply_keyboard], one_time_keyboard=True,
             resize_keyboard=True,
         ),
     )
@@ -259,7 +261,7 @@ def service(update: Update, context: CallbackContext) -> int:
     services = Service.objects.all()
     for some_service in services:
         reply_keyboard.append(
-            [f'{some_service.service_name} {some_service.price}']
+            [f'{some_service.name} {some_service.price}']
         )
     user = update.message.from_user
     logger.info("Service choice of %s: %s", user.first_name, reply_keyboard)
@@ -275,17 +277,14 @@ def service(update: Update, context: CallbackContext) -> int:
 
 
 def time(update: Update, context: CallbackContext) -> int:
-    reply_keyboard = list()
     context.bot_data['step'] += 1
     print('time, step:', context.bot_data['step'])
-    booking_time = Schedule.objects.all()
-    for some_time in booking_time:
-        reply_keyboard.append(
-            [some_time.TIMESLOT_LIST]
-        )
-    user = update.message.from_user
-    logger.info("Service of %s: %s", user.first_name, update.message.text)
     context.bot_data['service'] = update.message.text
+    time_slots = TimeSlot.objects.all()
+    slot_keyboard = list()
+    for time_slot in time_slots:
+        slot_keyboard.append(f'{time_slot.free_time.hour}ч {time_slot.free_time.minute}мин')
+    reply_keyboard = [slot_keyboard]
     update.message.reply_text(
         'Выберите время',
         reply_markup=ReplyKeyboardMarkup(
@@ -293,7 +292,6 @@ def time(update: Update, context: CallbackContext) -> int:
             resize_keyboard=True,
         ),
     )
-
     return MASTER
 
 
@@ -344,10 +342,6 @@ def run_polling():
                     Filters.regex('^Выбрать услугу$'),
                     service
                 ),
-                MessageHandler(
-                    Filters.regex('^Отменить$'),
-                    cancel
-                )
             ],
             NEARBY_SALON: [
                 MessageHandler(
@@ -369,9 +363,9 @@ def run_polling():
             ],
             SERVICE: [
                 MessageHandler(
-                    Filters.text & ~Filters.command,
+                    Filters.regex('^Выбрать ближайший салон$'),
                     service
-                )
+                ),
             ],
             TIME: [
                 MessageHandler(
@@ -392,11 +386,15 @@ def run_polling():
                 ),
                 MessageHandler(
                     Filters.regex('^Не согласен$'),
-                    cancel
+                    start
                 )
             ],
             NAME: [MessageHandler(Filters.text & ~Filters.command, name)],
-            PHONE: [MessageHandler(Filters.text & ~Filters.command, phone_number)],
+            PHONE: [MessageHandler(
+                Filters.text & ~Filters.command,
+                phone_number
+                )
+            ],
             CONFIRMATION: [
                 MessageHandler(
                     Filters.regex('^Хочу записаться!$'),
@@ -404,7 +402,7 @@ def run_polling():
                 ),
                 MessageHandler(
                     Filters.regex('^Отменить$'),
-                    cancel
+                    start
                 )
             ],
         },
