@@ -94,26 +94,42 @@ def name(update: Update, context: CallbackContext) -> int:
     return PHONE
 
 
+def get_valid_phone(input_number: str):
+    try:
+        parse_number = phonenumbers.parse(input_number, "IN")
+        if phonenumbers.is_valid_number(parse_number):
+            national_number = phonenumbers.format_number(parse_number, phonenumbers.PhoneNumberFormat.E164)
+            return national_number
+    except phonenumbers.NumberParseException:
+        print("Номер введен не верно, введите номер в формате \"+79876665544")
+
+
 def phone_number(update: Update, context: CallbackContext) -> int:
 
     context.bot_data['phone'] = update.message.text
-    reply_keyboard = [['Хочу записаться!', 'Отменить']]
-    try:
-        user = update.message.from_user
-        if not user:
-            raise ValueError('Invalid value')
-        logger.info("Phone number of %s: %s", user.first_name, update.message.text)
-        update.message.reply_text(
-            'Спасибо. Подтвердите запись к мастеру',
-            reply_markup=ReplyKeyboardMarkup(
-                reply_keyboard, one_time_keyboard=True,
-                resize_keyboard=True,
+    if get_valid_phone(update.message.text):
+        update.message.reply_text(f'Ваш номер: {update.message.text}')
+        reply_keyboard = [['Хочу записаться!', 'Отменить']]
+        try:
+            user = update.message.from_user
+            if not user:
+                raise ValueError('Invalid value')
+            logger.info("Phone number of %s: %s", user.first_name, update.message.text)
+            update.message.reply_text(
+                'Спасибо. Подтвердите запись к мастеру',
+                reply_markup=ReplyKeyboardMarkup(
+                    reply_keyboard, one_time_keyboard=True,
+                    resize_keyboard=True,
+                )
             )
-        )
-    except ValueError:
-        print('Похоже, что во введённом вами адресе электронной почты есть ошибка.')
+        except ValueError:
+            print('Похоже, что во введённом вами адресе электронной почты есть ошибка.')
 
-    return CONFIRMATION
+        return CONFIRMATION
+    else:
+        update.message.reply_text(f'Номер введен не верно, введите номер в формате \"+79876665544')
+        context.bot_data['phone'] = update.message.text
+
 
 
 def confirmation(update: Update, context: CallbackContext) -> int:
